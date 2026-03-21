@@ -69,7 +69,7 @@ const textareaVariants = cva(
   }
 );
 
-const labelVariants = cva(["body-sm font-medium text-black"]);
+const labelVariants = cva(["body-sm font-medium"]);
 
 const helperTextVariants = cva(["body-sm font-medium"], {
   variants: {
@@ -146,6 +146,16 @@ export interface TextareaProps
    * Ref for the textarea element
    */
   ref?: React.Ref<HTMLTextAreaElement>;
+
+  /**
+   * Class name for the textarea wrapper
+   */
+  textareaWrapperClassName?: string;
+
+  /**
+   * Class name for the label wrapper
+   */
+  labelWrapperClassName?: string;
 }
 
 const Textarea = ({
@@ -163,6 +173,8 @@ const Textarea = ({
   disabled = false,
   fullWidth = false,
   ref,
+  textareaWrapperClassName,
+  labelWrapperClassName,
   ...props
 }: TextareaProps) => {
   const autoId = useId();
@@ -176,7 +188,7 @@ const Textarea = ({
       className={cn("gap-sm flex flex-col", fullWidth ? "w-full" : "w-auto", containerClassName)}
     >
       {label && (
-        <div className="gap-xxs flex flex-row items-center">
+        <div className={cn("gap-xxs flex flex-row items-center", labelWrapperClassName)}>
           <label htmlFor={textareaId} className={labelVariants()}>
             {label}
           </label>
@@ -196,6 +208,7 @@ const Textarea = ({
             disabled,
             size,
           }),
+          textareaWrapperClassName,
           fullWidth ? "w-full" : "w-auto"
         )}
       >

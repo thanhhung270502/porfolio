@@ -40,6 +40,7 @@
     "class-variance-authority": "^0.7.1",
     "cookies-next": "^6.1.1",
     "dayjs": "^1.11.19",
+    "framer-motion": "^12.38.0",
     "husky": "^9.1.7",
     "iconsax-reactjs": "^0.0.8",
     "idb-keyval": "^6.2.2",

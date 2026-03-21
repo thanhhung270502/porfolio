@@ -20,6 +20,7 @@ export * from "./sheet";
 export * from "./sidebar";
 export * from "./skeleton";
 export * from "./slider-comparison";
+export * from "./tabs";
 export * from "./textarea";
 export * from "./toast";
 export * from "./tooltip";

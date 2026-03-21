@@ -248,7 +248,17 @@ const elementVariants = cva(["flex items-center justify-center"], {
   },
 });
 
-const labelVariants = cva(["body-sm font-medium text-black"]);
+const labelVariants = cva(["body-sm font-medium"], {
+  variants: {
+    size: {
+      sm: "text-xs",
+      md: "text-sm",
+    },
+  },
+  defaultVariants: {
+    size: "md",
+  },
+});
 
 const helperTextVariants = cva(["body-sm font-medium"], {
   variants: {
@@ -445,7 +455,7 @@ const Input = ({
     >
       {label && (
         <div className={cn("gap-xxs flex flex-row items-center", labelWrapperClassName)}>
-          <label htmlFor={inputId} className={cn(labelVariants)}>
+          <label htmlFor={inputId} className={cn(labelVariants({ size }))}>
             {label}
           </label>
           {required && <span className="body-md text-brand-secondary font-medium">{" *"}</span>}
