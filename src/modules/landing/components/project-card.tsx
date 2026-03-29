@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowSquareOut, GithubLogo } from "@phosphor-icons/react";
+import { ArrowSquareOut, CheckCircle, GithubLogo, Star } from "@phosphor-icons/react";
 
 import type { LandingProject } from "../types";
 
@@ -21,6 +21,40 @@ export function ProjectCard({ project }: ProjectCardProps) {
       )}
 
       <p className="leading-relaxed text-white/80">{project.description}</p>
+
+      {project.features && project.features.length > 0 && (
+        <div>
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white/60">
+            <Star size={14} className="text-cyan-400" />
+            Core Features
+          </h4>
+          <ul className="p-2xl space-y-2 rounded-lg border border-white/10">
+            {project.features.map((feature) => (
+              <li key={feature} className="flex gap-2 text-sm text-white/75">
+                <span className="mt-0.5 shrink-0 text-cyan-400">•</span>
+                <span>{feature}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {project.responsibilities && project.responsibilities.length > 0 && (
+        <div>
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white/60">
+            <CheckCircle size={14} className="text-emerald-400" />
+            Responsibilities
+          </h4>
+          <ul className="p-2xl space-y-2 rounded-lg border border-white/10">
+            {project.responsibilities.map((item) => (
+              <li key={item} className="flex gap-2 text-sm text-white/75">
+                <span className="mt-0.5 shrink-0 text-emerald-400">•</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div>
         <h4 className="mb-2 text-sm font-semibold text-white/60">Technologies</h4>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, Student, Trophy } from "@phosphor-icons/react";
+import { Calendar, Student } from "@phosphor-icons/react";
 
 import type { LandingEducationData } from "../types";
 
@@ -30,14 +30,6 @@ export function EducationWidget({ education }: EducationWidgetProps) {
             <span className="text-sm">Period</span>
           </div>
           <p className="font-medium text-white">{education.period}</p>
-        </div>
-        <div className="rounded-xl bg-white/5 p-4">
-          <div className="mb-1 flex items-center gap-2 text-white/60">
-            <Trophy size={16} />
-            <span className="text-sm">GPA</span>
-          </div>
-          <p className="font-medium text-cyan-400">{education.gpa}</p>
-          <p className="text-sm text-white/50">{education.rank}</p>
         </div>
       </div>
 
@@ -72,12 +64,6 @@ export function EducationWidget({ education }: EducationWidgetProps) {
           <p className="font-medium text-white">{education.school}</p>
           <p className="text-sm text-white/70">{education.degree}</p>
           <p className="text-sm text-white/50">{education.period}</p>
-          <div className="mt-3 flex gap-4">
-            <span className="text-sm">
-              <span className="text-cyan-400">GPA:</span> {education.gpa}
-            </span>
-            <span className="text-sm text-white/70">{education.rank}</span>
-          </div>
         </div>
       </LiquidGlass>
     </ExpandableWidget>

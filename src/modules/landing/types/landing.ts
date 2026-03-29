@@ -6,6 +6,8 @@ export interface LandingProject {
   image?: string;
   link?: string;
   github?: string;
+  features?: string[];
+  responsibilities?: string[];
 }
 
 export interface LandingTechItem {

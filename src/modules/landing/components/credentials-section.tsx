@@ -9,13 +9,7 @@ import type {
   LandingPublicationItem,
 } from "../types";
 
-import {
-  AchievementsWidget,
-  CoursesWidget,
-  EducationWidget,
-  PublicationsWidget,
-  ScrollButton,
-} from ".";
+import { AchievementsWidget, CoursesWidget, EducationWidget, ScrollButton } from ".";
 
 interface CredentialsSectionProps {
   education: LandingEducationData;
@@ -24,12 +18,7 @@ interface CredentialsSectionProps {
   courses: LandingCourseItem[];
 }
 
-export function CredentialsSection({
-  education,
-  publications,
-  achievements,
-  courses,
-}: CredentialsSectionProps) {
+export function CredentialsSection({ education, achievements, courses }: CredentialsSectionProps) {
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
@@ -61,9 +50,9 @@ export function CredentialsSection({
           <EducationWidget education={education} />
         </motion.div>
 
-        <motion.div variants={itemVariants}>
+        {/* <motion.div variants={itemVariants}>
           <PublicationsWidget publications={publications} />
-        </motion.div>
+        </motion.div> */}
 
         <motion.div variants={itemVariants}>
           <AchievementsWidget achievements={achievements} />

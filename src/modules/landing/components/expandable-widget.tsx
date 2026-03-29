@@ -166,7 +166,7 @@ export function ExpandableWidget({
                   <X size={20} className="text-white/80" />
                 </motion.button>
 
-                <div className="p-6 pt-2">
+                <div className="p-6">
                   {title && (
                     <motion.h3
                       initial={{ opacity: 0, y: -10 }}

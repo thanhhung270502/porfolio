@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 
 import type { LandingProject, LandingTechItem } from "../types";
 
-import { HomelabWidget, ProjectCard, ScrollButton, TechStackWidget } from ".";
+import { ProjectCard, ScrollButton, TechStackWidget } from ".";
 
 interface BentoGridProps {
   projects: LandingProject[];
@@ -45,9 +45,9 @@ export function BentoGrid({ projects, techStack }: BentoGridProps) {
         </motion.div>
 
         {/* Homelab Status */}
-        <motion.div variants={itemVariants} className="lg:col-span-2">
+        {/* <motion.div variants={itemVariants} className="lg:col-span-2">
           <HomelabWidget />
-        </motion.div>
+        </motion.div> */}
 
         {/* Project Cards */}
         {projects.slice(0, 3).map((project) => (
