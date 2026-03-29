@@ -28,77 +28,6 @@ export const migrations: { name: string; sql: string }[] = [
     `,
   },
 
-  // ── ENUMs ────────────────────────────────────────────────────────────────────
-  {
-    name: "002_create_order_state_enum",
-    sql: `
-      DO $body$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_state') THEN
-          CREATE TYPE order_state AS ENUM (
-            'pending',
-            'processingPayment',
-            'processedPayment',
-            'processingShipstation',
-            'processedShipstation',
-            'sendingEmails',
-            'processed',
-            'imagesSent',
-            'shipped'
-          );
-        END IF;
-      END;
-      $body$;
-    `,
-  },
-  {
-    name: "003_create_tile_size_enum",
-    sql: `
-      DO $body$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tile_size') THEN
-          CREATE TYPE tile_size AS ENUM (
-            '8x8',
-            '12x12'
-          );
-        END IF;
-      END;
-      $body$;
-    `,
-  },
-  {
-    name: "004_create_promo_code_type_enum",
-    sql: `
-      DO $body$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'promo_code_type') THEN
-          CREATE TYPE promo_code_type AS ENUM (
-            'percentage',
-            'discount',
-            'free'
-          );
-        END IF;
-      END;
-      $body$;
-    `,
-  },
-  {
-    name: "005_create_promo_code_size_enum",
-    sql: `
-      DO $body$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'promo_code_size') THEN
-          CREATE TYPE promo_code_size AS ENUM (
-            'all',
-            '8x8',
-            '12x12'
-          );
-        END IF;
-      END;
-      $body$;
-    `,
-  },
-
   // ── users ────────────────────────────────────────────────────────────────────
   // NOTE: last_order_id has no FK here — circular FK with orders is added in migration 040.
   {
@@ -161,43 +90,47 @@ export const migrations: { name: string; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions(expires_at);
     `,
   },
-
-  // ── user_addresses ───────────────────────────────────────────────────────────
+  // ── chat_conversations ────────────────────────────────────────────────────
   {
-    name: "011_create_user_addresses",
+    name: "011_create_chat_conversations",
     sql: `
-      CREATE TABLE IF NOT EXISTS user_addresses (
-        id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id       UUID          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        company_name  VARCHAR(255),
-        address       VARCHAR(255),
-        unit_or_suite VARCHAR(100),
-        city          VARCHAR(100),
-        state         VARCHAR(100),
-        zip           VARCHAR(20),
-        country       VARCHAR(2),
-        is_primary    BOOLEAN       NOT NULL DEFAULT FALSE,
-        created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-        updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      CREATE TABLE IF NOT EXISTS chat_conversations (
+        id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id           UUID,
+        status            TEXT        NOT NULL DEFAULT 'active',
+        assigned_to       UUID,
+        escalation_reason TEXT,
+        metadata          JSONB       NOT NULL DEFAULT '{}',
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        deleted_at        TIMESTAMPTZ
       );
     `,
   },
   {
-    name: "012_create_idx_user_addresses_user_id",
+    name: "012_create_idx_chat_conversations_user_id",
     sql: `
-      CREATE INDEX IF NOT EXISTS idx_user_addresses_user_id ON user_addresses(user_id);
+      CREATE INDEX IF NOT EXISTS idx_chat_conversations_user_id
+        ON chat_conversations(user_id) WHERE deleted_at IS NULL;
     `,
   },
   {
-    name: "013_create_trg_user_addresses_updated_at",
+    name: "013_create_idx_chat_conversations_status",
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_chat_conversations_status
+        ON chat_conversations(status) WHERE deleted_at IS NULL;
+    `,
+  },
+  {
+    name: "014_create_chat_conversations_updated_at_trigger",
     sql: `
       DO $body$
       BEGIN
         IF NOT EXISTS (
-          SELECT 1 FROM pg_trigger WHERE tgname = 'trg_user_addresses_updated_at'
+          SELECT 1 FROM pg_trigger WHERE tgname = 'set_updated_at_chat_conversations'
         ) THEN
-          CREATE TRIGGER trg_user_addresses_updated_at
-            BEFORE UPDATE ON user_addresses
+          CREATE TRIGGER set_updated_at_chat_conversations
+            BEFORE UPDATE ON chat_conversations
             FOR EACH ROW EXECUTE FUNCTION set_updated_at();
         END IF;
       END;
@@ -205,417 +138,45 @@ export const migrations: { name: string; sql: string }[] = [
     `,
   },
 
-  // ── template_collections ─────────────────────────────────────────────────────
+  // ── chat_messages ─────────────────────────────────────────────────────────
   {
-    name: "014_create_template_collections",
+    name: "015_create_chat_messages",
     sql: `
-      CREATE TABLE IF NOT EXISTS template_collections (
-        id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-        name          VARCHAR(255)  NOT NULL,
-        menu_name     VARCHAR(255),
-        is_public     BOOLEAN       NOT NULL DEFAULT TRUE,
-        sort_index    INT,
-        menu_icon_id  VARCHAR(128),
-        search_terms  TEXT[],
-        created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-        updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-        deleted_at    TIMESTAMPTZ
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        conversation_id UUID        NOT NULL,
+        role            TEXT        NOT NULL,
+        content         TEXT        NOT NULL,
+        provider        TEXT,
+        token_count     INTEGER,
+        metadata        JSONB       NOT NULL DEFAULT '{}',
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        deleted_at      TIMESTAMPTZ
       );
     `,
   },
   {
-    name: "015_create_trg_template_collections_updated_at",
+    name: "016_create_idx_chat_messages_conversation_id",
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id
+        ON chat_messages(conversation_id) WHERE deleted_at IS NULL;
+    `,
+  },
+  {
+    name: "017_create_chat_messages_updated_at_trigger",
     sql: `
       DO $body$
       BEGIN
         IF NOT EXISTS (
-          SELECT 1 FROM pg_trigger WHERE tgname = 'trg_template_collections_updated_at'
+          SELECT 1 FROM pg_trigger WHERE tgname = 'set_updated_at_chat_messages'
         ) THEN
-          CREATE TRIGGER trg_template_collections_updated_at
-            BEFORE UPDATE ON template_collections
+          CREATE TRIGGER set_updated_at_chat_messages
+            BEFORE UPDATE ON chat_messages
             FOR EACH ROW EXECUTE FUNCTION set_updated_at();
         END IF;
       END;
       $body$;
-    `,
-  },
-
-  // ── template_images ──────────────────────────────────────────────────────────
-  {
-    name: "016_create_template_images",
-    sql: `
-      CREATE TABLE IF NOT EXISTS template_images (
-        id                      UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-        template_collection_id  UUID          NOT NULL REFERENCES template_collections(id) ON DELETE CASCADE,
-        name                    VARCHAR(255)  NOT NULL,
-        image_path              TEXT          NOT NULL
-      );
-    `,
-  },
-  {
-    name: "017_create_idx_template_images_collection_id",
-    sql: `
-      CREATE INDEX IF NOT EXISTS idx_template_images_collection_id ON template_images(template_collection_id);
-    `,
-  },
-
-  // ── template_image_url_cache ─────────────────────────────────────────────────
-  // NOTE: template_image_id UNIQUE already creates an implicit index.
-  {
-    name: "018_create_template_image_url_cache",
-    sql: `
-      CREATE TABLE IF NOT EXISTS template_image_url_cache (
-        id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-        template_image_id   UUID          NOT NULL UNIQUE REFERENCES template_images(id) ON DELETE CASCADE,
-        url                 TEXT          NOT NULL,
-        cached_at           TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-        expires_at          TIMESTAMPTZ   NOT NULL
-      );
-    `,
-  },
-
-  // ── promo_codes ──────────────────────────────────────────────────────────────
-  {
-    name: "019_create_promo_codes",
-    sql: `
-      CREATE TABLE IF NOT EXISTS promo_codes (
-        id                        UUID             PRIMARY KEY DEFAULT gen_random_uuid(),
-        code                      VARCHAR(128)     NOT NULL UNIQUE,
-        type                      promo_code_type  NOT NULL,
-        size                      promo_code_size  NOT NULL DEFAULT 'all',
-        amount                    NUMERIC(10, 2)   NOT NULL DEFAULT 0,
-        one_time_use              BOOLEAN          NOT NULL DEFAULT FALSE,
-        used                      BOOLEAN          NOT NULL DEFAULT FALSE,
-        valid_for_2_tiles_free    BOOLEAN          NOT NULL DEFAULT FALSE,
-        valid_for_free_shipping   BOOLEAN          NOT NULL DEFAULT FALSE,
-        only_valid_for_tile_size  tile_size,
-        start_date                TIMESTAMPTZ      NOT NULL,
-        end_date                  TIMESTAMPTZ,
-        search_terms              TEXT[],
-        created_at                TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
-        updated_at                TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
-        deleted_at                TIMESTAMPTZ
-      );
-    `,
-  },
-  {
-    name: "020_create_idx_promo_codes_code",
-    sql: `
-      CREATE INDEX IF NOT EXISTS idx_promo_codes_code ON promo_codes(code);
-    `,
-  },
-  {
-    name: "021_create_trg_promo_codes_updated_at",
-    sql: `
-      DO $body$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_trigger WHERE tgname = 'trg_promo_codes_updated_at'
-        ) THEN
-          CREATE TRIGGER trg_promo_codes_updated_at
-            BEFORE UPDATE ON promo_codes
-            FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-        END IF;
-      END;
-      $body$;
-    `,
-  },
-
-  // ── orders ───────────────────────────────────────────────────────────────────
-  {
-    name: "022_create_orders",
-    sql: `
-      CREATE TABLE IF NOT EXISTS orders (
-        id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id       UUID          REFERENCES users(id) ON DELETE SET NULL,
-        email         VARCHAR(255),
-        full_name     VARCHAR(255),
-        tile_size     tile_size     NOT NULL,
-        app_version   VARCHAR(64),
-        state         order_state   NOT NULL DEFAULT 'pending',
-        is_processed  BOOLEAN       NOT NULL DEFAULT FALSE,
-        promo_code    VARCHAR(128)  REFERENCES promo_codes(code),
-        token         VARCHAR(255)  NOT NULL,
-        search_terms  TEXT[],
-        created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-        updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-        deleted_at    TIMESTAMPTZ
-      );
-    `,
-  },
-  {
-    name: "023_create_idx_orders_user_id",
-    sql: `
-      CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
-    `,
-  },
-  {
-    name: "024_create_idx_orders_state",
-    sql: `
-      CREATE INDEX IF NOT EXISTS idx_orders_state ON orders(state);
-    `,
-  },
-  {
-    name: "025_create_idx_orders_promo_code",
-    sql: `
-      CREATE INDEX IF NOT EXISTS idx_orders_promo_code ON orders(promo_code);
-    `,
-  },
-  {
-    name: "026_create_idx_orders_created_at",
-    sql: `
-      CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
-    `,
-  },
-  {
-    name: "027_create_trg_orders_updated_at",
-    sql: `
-      DO $body$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_trigger WHERE tgname = 'trg_orders_updated_at'
-        ) THEN
-          CREATE TRIGGER trg_orders_updated_at
-            BEFORE UPDATE ON orders
-            FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-        END IF;
-      END;
-      $body$;
-    `,
-  },
-
-  // ── order_addresses ──────────────────────────────────────────────────────────
-  // NOTE: order_id UNIQUE already creates an implicit index.
-  {
-    name: "028_create_order_addresses",
-    sql: `
-      CREATE TABLE IF NOT EXISTS order_addresses (
-        id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-        order_id      UUID         NOT NULL UNIQUE REFERENCES orders(id) ON DELETE CASCADE,
-        company_name  VARCHAR(255),
-        address       VARCHAR(500),
-        unit_or_suite VARCHAR(255),
-        city          VARCHAR(255),
-        state         VARCHAR(255),
-        zip           VARCHAR(32),
-        country       VARCHAR(255)
-      );
-    `,
-  },
-
-  // ── order_groups ─────────────────────────────────────────────────────────────
-  {
-    name: "029_create_order_groups",
-    sql: `
-      CREATE TABLE IF NOT EXISTS order_groups (
-        id          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-        order_id    UUID          NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-        name        VARCHAR(255)  NOT NULL,
-        sort_order  INT           NOT NULL DEFAULT 0
-      );
-    `,
-  },
-  {
-    name: "030_create_idx_order_groups_order_id",
-    sql: `
-      CREATE INDEX IF NOT EXISTS idx_order_groups_order_id ON order_groups(order_id);
-    `,
-  },
-
-  // ── order_tiles ──────────────────────────────────────────────────────────────
-  {
-    name: "031_create_order_tiles",
-    sql: `
-      CREATE TABLE IF NOT EXISTS order_tiles (
-        id             UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-        order_group_id UUID          NOT NULL REFERENCES order_groups(id) ON DELETE CASCADE,
-        file_name      VARCHAR(255),
-        image_path     TEXT          NOT NULL
-      );
-    `,
-  },
-  {
-    name: "032_create_idx_order_tiles_group_id",
-    sql: `
-      CREATE INDEX IF NOT EXISTS idx_order_tiles_group_id ON order_tiles(order_group_id);
-    `,
-  },
-
-  // ── order_prices ─────────────────────────────────────────────────────────────
-  // NOTE: order_id UNIQUE already creates an implicit index.
-  {
-    name: "033_create_order_prices",
-    sql: `
-      CREATE TABLE IF NOT EXISTS order_prices (
-        id                         UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
-        order_id                   UUID           NOT NULL UNIQUE REFERENCES orders(id) ON DELETE CASCADE,
-        sub_total                  NUMERIC(10, 2) NOT NULL DEFAULT 0,
-        sub_total_with_promo_code  NUMERIC(10, 2),
-        shipping                   INT            NOT NULL DEFAULT 0,
-        tax                        NUMERIC(10, 2) NOT NULL DEFAULT 0,
-        total                      NUMERIC(10, 2) NOT NULL DEFAULT 0,
-        promo_code_discount        NUMERIC(10, 2),
-        promo_code_discount_string VARCHAR(64)
-      );
-    `,
-  },
-
-  // ── order_group_prices ───────────────────────────────────────────────────────
-  {
-    name: "034_create_order_group_prices",
-    sql: `
-      CREATE TABLE IF NOT EXISTS order_group_prices (
-        id              UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
-        order_price_id  UUID           NOT NULL REFERENCES order_prices(id) ON DELETE CASCADE,
-        order_group_id  UUID           NOT NULL REFERENCES order_groups(id) ON DELETE CASCADE,
-        tile_price      NUMERIC(10, 2) NOT NULL DEFAULT 0,
-        total_price     NUMERIC(10, 2) NOT NULL DEFAULT 0
-      );
-    `,
-  },
-  {
-    name: "035_create_idx_order_group_prices_price_id",
-    sql: `
-      CREATE INDEX IF NOT EXISTS idx_order_group_prices_price_id ON order_group_prices(order_price_id);
-    `,
-  },
-
-  // ── order_tile_metadata ──────────────────────────────────────────────────────
-  {
-    name: "036_create_order_tile_metadata",
-    sql: `
-      CREATE TABLE IF NOT EXISTS order_tile_metadata (
-        id             UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-        order_tile_id  UUID          NOT NULL REFERENCES order_tiles(id) ON DELETE CASCADE,
-        meta_key       VARCHAR(255)  NOT NULL,
-        meta_value     TEXT
-      );
-    `,
-  },
-  {
-    name: "037_create_idx_order_tile_metadata_tile_id",
-    sql: `
-      CREATE INDEX IF NOT EXISTS idx_order_tile_metadata_tile_id ON order_tile_metadata(order_tile_id);
-    `,
-  },
-
-  // ── order_reports ────────────────────────────────────────────────────────────
-  {
-    name: "038_create_order_reports",
-    sql: `
-      CREATE TABLE IF NOT EXISTS order_reports (
-        id              UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
-        report_date     DATE           NOT NULL UNIQUE,
-        total_quantity  INT            NOT NULL DEFAULT 0,
-        total_amount    NUMERIC(10, 2) NOT NULL DEFAULT 0,
-        updated_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW()
-      );
-    `,
-  },
-
-  // ── order_report_sizes ───────────────────────────────────────────────────────
-  {
-    name: "039_create_order_report_sizes",
-    sql: `
-      CREATE TABLE IF NOT EXISTS order_report_sizes (
-        id          UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
-        report_id   UUID           NOT NULL REFERENCES order_reports(id) ON DELETE CASCADE,
-        tile_size   tile_size      NOT NULL,
-        quantity    INT            NOT NULL DEFAULT 0,
-        amount      NUMERIC(10, 2) NOT NULL DEFAULT 0,
-        UNIQUE (report_id, tile_size)
-      );
-    `,
-  },
-
-  // ── users.last_order_id FK (circular — added after orders exists) ─────────────
-  {
-    name: "040_alter_users_add_last_order_fk",
-    sql: `
-      DO $body$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.table_constraints
-          WHERE constraint_name = 'fk_users_last_order'
-            AND table_name = 'users'
-        ) THEN
-          ALTER TABLE users
-            ADD CONSTRAINT fk_users_last_order
-            FOREIGN KEY (last_order_id) REFERENCES orders(id);
-        END IF;
-      END;
-      $body$;
-    `,
-  },
-
-  // ── order_report_sizes indexes ────────────────────────────────────────────────
-  {
-    name: "041_create_idx_order_report_sizes_report_id",
-    sql: `
-      CREATE INDEX IF NOT EXISTS idx_order_report_sizes_report_id ON order_report_sizes(report_id);
-    `,
-  },
-
-  // ── unique constraint on order_tile_metadata (tile + key) ───────────────────
-  {
-    name: "042_add_unique_order_tile_metadata_tile_key",
-    sql: `
-      DO $body$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint
-          WHERE conname = 'uq_order_tile_metadata_tile_key'
-        ) THEN
-          ALTER TABLE order_tile_metadata
-            ADD CONSTRAINT uq_order_tile_metadata_tile_key
-            UNIQUE (order_tile_id, meta_key);
-        END IF;
-      END;
-      $body$;
-    `,
-  },
-
-  // ── add JSONB metadata column to order_tiles ─────────────────────────────────
-  {
-    name: "043_add_metadata_jsonb_to_order_tiles",
-    sql: `
-      ALTER TABLE order_tiles
-        ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
-    `,
-  },
-
-  // ── backfill metadata from EAV table into JSONB column ───────────────────────
-  {
-    name: "044_backfill_order_tiles_metadata_from_eav",
-    sql: `
-      UPDATE order_tiles t
-      SET metadata = COALESCE(
-        (SELECT jsonb_object_agg(m.meta_key, m.meta_value)
-         FROM order_tile_metadata m
-         WHERE m.order_tile_id = t.id),
-        '{}'::jsonb
-      );
-    `,
-  },
-
-  // ── order_transactions ───────────────────────────────────────────────────────
-  {
-    name: "045_create_order_transactions",
-    sql: `
-      CREATE TABLE IF NOT EXISTS order_transactions (
-        id              UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
-        order_id        UUID           NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-        transaction_id  VARCHAR(255)   NOT NULL UNIQUE,
-        amount          NUMERIC(10, 2) NOT NULL,
-        status          VARCHAR(64)    NOT NULL DEFAULT 'success',
-        created_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW()
-      );
-    `,
-  },
-  {
-    name: "046_create_idx_order_transactions_order_id",
-    sql: `
-      CREATE INDEX IF NOT EXISTS idx_order_transactions_order_id ON order_transactions(order_id);
     `,
   },
 ];

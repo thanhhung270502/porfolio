@@ -17,6 +17,7 @@
     "bootstrap-localstack": "cd scripts && /bin/bash ./localstack/bootstrap.sh"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@aws-sdk/client-s3": "^3.1005.0",
     "@aws-sdk/s3-request-presigner": "^3.1005.0",
     "@base-ui-components/react": "^1.0.0-beta.4",

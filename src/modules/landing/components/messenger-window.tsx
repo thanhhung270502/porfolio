@@ -1,11 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { EChatMessageProvider, EChatMessageRole } from "@common";
 import { X } from "@phosphor-icons/react";
 import { motion } from "framer-motion";
+import { useAtom } from "jotai";
 
 import { Input, Textarea } from "@/shared";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared";
+import { createConversation, sendChatMessage } from "@/shared/apis/chat";
+import {
+  chatConversationIdAtom,
+  chatIsStreamingAtom,
+  chatMessagesAtom,
+  chatStreamingContentAtom,
+} from "@/shared/stores/chat.store";
 
 import { LiquidGlass } from ".";
 
@@ -13,37 +22,107 @@ interface MessengerWindowProps {
   onClose: () => void;
 }
 
-// TODO: Replace with real AI chat integration (e.g. OpenAI / Anthropic API)
 function ChatTab() {
-  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([
-    {
-      role: "assistant",
-      content: "Hi! I'm an AI assistant. Feel free to ask me anything about this portfolio.",
-    },
-  ]);
+  const [conversationId, setConversationId] = useAtom(chatConversationIdAtom);
+  const [messages, setMessages] = useAtom(chatMessagesAtom);
+  const [isStreaming, setIsStreaming] = useAtom(chatIsStreamingAtom);
+  const [streamingContent, setStreamingContent] = useAtom(chatStreamingContentAtom);
   const [input, setInput] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    const userMessage = { role: "user" as const, content: input };
-    setMessages((prev) => [
-      ...prev,
-      userMessage,
-      // TODO: Replace this placeholder with actual AI API call
-      {
-        role: "assistant",
-        content:
-          "Thanks for your message! AI responses are not yet connected — TODO: wire up AI API.",
-      },
-    ]);
+  // Bootstrap a conversation on first open
+  useEffect(() => {
+    if (!conversationId) {
+      createConversation({}).then((res) => {
+        setConversationId(res.conversation.id);
+        // Seed with a welcome message (local only, not persisted)
+        setMessages([
+          {
+            id: "welcome",
+            conversationId: res.conversation.id,
+            role: EChatMessageRole.ASSISTANT,
+            content: "Hi! I'm SweetPix Support. How can I help you today?",
+            provider: null,
+            tokenCount: null,
+            metadata: {},
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]);
+      });
+    }
+  }, [conversationId, setConversationId, setMessages]);
+
+  // Scroll to bottom whenever messages or streaming content change
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, streamingContent]);
+
+  const handleSend = useCallback(async () => {
+    const content = input.trim();
+    if (!content || !conversationId || isStreaming) return;
+
     setInput("");
-  };
+    setIsStreaming(true);
+    setStreamingContent("");
+
+    // Optimistically add user message
+    const optimisticUserMsg = {
+      id: `optimistic-${Date.now()}`,
+      conversationId,
+      role: EChatMessageRole.USER,
+      content,
+      provider: null,
+      tokenCount: null,
+      metadata: {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    setMessages((prev) => [...prev, optimisticUserMsg]);
+
+    let accum = "";
+
+    await sendChatMessage(
+      conversationId,
+      content,
+      (token) => {
+        accum += token;
+        setStreamingContent(accum);
+      },
+      () => {
+        // Finalize: append completed AI message
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `ai-${Date.now()}`,
+            conversationId,
+            role: EChatMessageRole.ASSISTANT,
+            content: accum,
+            provider: EChatMessageProvider.CLAUDE,
+            tokenCount: null,
+            metadata: {},
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]);
+        setStreamingContent("");
+        setIsStreaming(false);
+      },
+      () => {
+        setStreamingContent("");
+        setIsStreaming(false);
+      }
+    );
+  }, [input, conversationId, isStreaming, setMessages, setIsStreaming, setStreamingContent]);
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+        {messages.map((msg) => (
+          <div
+            key={msg.id}
+            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+          >
             <div
               className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${
                 msg.role === "user" ? "bg-cyan-500/30 text-white" : "bg-white/10 text-white/80"
@@ -53,18 +132,48 @@ function ChatTab() {
             </div>
           </div>
         ))}
+
+        {/* Streaming AI response */}
+        {isStreaming && streamingContent && (
+          <div className="flex justify-start">
+            <div className="max-w-[80%] rounded-xl bg-white/10 px-3 py-2 text-sm text-white/80">
+              {streamingContent}
+              <span className="ml-1 inline-block h-3 w-1 animate-pulse bg-white/60" />
+            </div>
+          </div>
+        )}
+
+        {/* Typing indicator (before first token arrives) */}
+        {isStreaming && !streamingContent && (
+          <div className="flex justify-start">
+            <div className="flex gap-1 rounded-xl bg-white/10 px-3 py-3">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/60"
+                  style={{ animationDelay: `${i * 0.15}s` }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
       </div>
+
       <div className="flex gap-2 border-t border-white/10 p-3">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
           placeholder="Ask me anything..."
-          className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-cyan-500/50"
+          disabled={isStreaming}
+          className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-cyan-500/50 disabled:opacity-50"
         />
         <button
           onClick={handleSend}
-          className="rounded-xl bg-cyan-500/30 px-3 py-2 text-sm text-cyan-300 transition-colors hover:bg-cyan-500/40"
+          disabled={isStreaming || !input.trim()}
+          className="rounded-xl bg-cyan-500/30 px-3 py-2 text-sm text-cyan-300 transition-colors hover:bg-cyan-500/40 disabled:opacity-40"
         >
           Send
         </button>
@@ -73,7 +182,6 @@ function ChatTab() {
   );
 }
 
-// TODO: Connect to a real email sending service (e.g. Resend, EmailJS, or backend API)
 function ContactTab() {
   const [submitted, setSubmitted] = useState(false);
 
@@ -85,7 +193,6 @@ function ContactTab() {
         </div>
         <p className="font-medium text-white">Message sent!</p>
         <p className="text-sm text-white/50">
-          {/* TODO: Note - this is UI only. Wire up email API to actually send messages */}
           I&apos;ll get back to you soon.
         </p>
       </div>
@@ -96,7 +203,6 @@ function ContactTab() {
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        // TODO: Connect to email sending API (Resend / EmailJS / backend endpoint)
         setSubmitted(true);
       }}
       className="space-y-3"

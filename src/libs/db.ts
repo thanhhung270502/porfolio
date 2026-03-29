@@ -1,5 +1,7 @@
 import { Pool } from "@neondatabase/serverless";
 
+import { logger } from "./logger";
+
 let _pool: Pool | null = null;
 
 /**
@@ -12,7 +14,12 @@ function getPool(): Pool {
     if (!connectionString) {
       throw new Error("DATABASE_URL environment variable is not set");
     }
-    _pool = new Pool({ connectionString });
+    try {
+      _pool = new Pool({ connectionString });
+    } catch (error) {
+      logger.error("Failed to create Neon Postgres connection pool", { error });
+      throw new Error("Failed to create Neon Postgres connection pool");
+    }
   }
   return _pool;
 }

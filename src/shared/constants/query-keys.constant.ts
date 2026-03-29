@@ -30,3 +30,9 @@ export const ORDER_TILE_KEYS = {
 export const BRAINTREE_KEYS = {
   token: () => ["braintree", "token"] as const,
 } as const;
+
+export const CHAT_KEYS = {
+  all: () => ["chat"] as const,
+  conversations: () => [...CHAT_KEYS.all(), "conversations"] as const,
+  conversation: (id: string) => [...CHAT_KEYS.conversations(), id] as const,
+} as const;
